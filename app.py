@@ -237,13 +237,18 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
 
     @app.post("/")
     def form_push():
+        patch = request.form.get("patch")
+        if isinstance(patch, str):
+            # Browsers submit textarea newlines as CRLF. Git applies that fine,
+            # but diff --check reports the embedded CR as trailing whitespace.
+            patch = patch.replace("\r\n", "\n").replace("\r", "\n")
         values = {"selected_repo": request.form.get("repo"),
-                  "patch": request.form.get("patch"), "message": request.form.get("message")}
+                  "patch": patch, "message": request.form.get("message")}
         if not authorized(request.form.get("token")):
             return render_template_string(PAGE, repos=bridge.repos, **values,
                                           outcome={"title": "Push failed", "detail": "Invalid bridge token"}), 403
         try:
-            result = bridge.push(request.form.get("repo"), request.form.get("patch"), request.form.get("message"))
+            result = bridge.push(request.form.get("repo"), patch, request.form.get("message"))
         except BridgeError as exc:
             return render_template_string(PAGE, repos=bridge.repos, **values,
                                           outcome={"title": "Push failed", "detail": "Git did not push the patch.", "error": str(exc)}), exc.status
