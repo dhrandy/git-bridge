@@ -90,6 +90,21 @@ def test_happy_path_mocked_git(client):
     assert commit.encode() in log.data
 
 
+def test_form_normalizes_crlf_patch(client):
+    browser, bridge = client
+    commit = "b" * 40
+    bridge.push = Mock(return_value={"repo": "demo", "commit": commit,
+                                     "url": f"https://github.com/example-owner/demo/commit/{commit}"})
+    payload = valid_payload()
+    payload["patch"] = payload["patch"].replace("\n", "\r\n")
+    payload["token"] = "test-bridge-token"
+    response = browser.post("/", data=payload)
+    assert response.status_code == 200
+    assert b"Push succeeded" in response.data
+    # The bridge receives the patch with LF newlines, as if typed on any OS.
+    bridge.push.assert_called_once_with("demo", valid_payload()["patch"], "Fix greeting")
+
+
 def test_head_mismatch(client):
     browser, bridge = client
     heads = iter(["a" * 40, "c" * 40])
