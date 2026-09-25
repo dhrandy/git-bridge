@@ -4,7 +4,7 @@ Git Bridge accepts a unified diff through a plain HTML form, applies it to a per
 
 ## Security and limits
 
-- Put it behind HTTPS and your existing access gateway (for example, authentik forward-auth on a reverse proxy). The app works without that gateway but still requires `BRIDGE_TOKEN` on each push, including form submissions. Use a long random token and fill the password field from your password manager. The API uses `Authorization: Bearer <BRIDGE_TOKEN>`.
+- Put it behind HTTPS and your existing access gateway (for example, authentik forward-auth on a reverse proxy). The app works without that gateway but still requires `BRIDGE_TOKEN` to unlock the browser form and for API pushes. A signed browser session keeps the form available after unlock; the form also accepts the token on each push. Use a long random token and fill the password field from your password manager. The API uses `Authorization: Bearer <BRIDGE_TOKEN>`.
 - `REPOS` is an exact allowlist. The owner is set in `GITHUB_OWNER`; Git URLs can only target `https://github.com/<owner>/<allowed-repo>.git`. Use a fine-grained GitHub PAT with **Contents: read and write** only for those repositories. Never put the PAT into the form. It is passed to Git through a askpass helper process, not a URL or command argument. Treat Docker environment access as privileged.
 - Git runs with fixed argument lists and no shell. The app requires text unified diffs and runs `git apply --check`, `git diff --check`, a commit with the configured identity, and a final remote HEAD comparison before pushing. It uses a lock per repository. A conflicting remote change or invalid patch fails visibly; no force push.
 - Push attempts append JSON lines (UTC timestamp, repo, commit, message, status, and push error if one occurred) to `/data/audit.jsonl`; authorized viewers can see them at `/log`. The form and log responses disable browser caching. The health endpoint is public and contains no secrets. Keep the log volume private and back it up if you depend on it. The commit message and diff may include sensitive material, so review what you submit.
@@ -59,11 +59,11 @@ Configure your reverse proxy to pass the app's HTTP traffic to the container's p
 
 ## Use
 
-Open `/`, select the exact repository, paste a text unified diff, enter a one-line commit message, fill the bridge token, and submit. The result shows a GitHub commit link or the Git error (including apply check, remote HEAD conflict, or push failure). `/log` requires the bridge token to display push attempts. `GET /api/v1/health` returns `{"status":"ok"}`. API clients can `POST /api/v1/push` with JSON fields `repo`, `patch`, and `message`, plus the bearer token. A successful request returns JSON with the repository, commit SHA, and URL. Don't reuse a patch after a success: it will no longer apply cleanly.
+Open `/`, fill the bridge token prompt, then select the exact repository, paste a text unified diff, enter a one-line commit message, and submit. The push form can also take the token directly. The result shows a GitHub commit link or the Git error (including apply check, remote HEAD conflict, or push failure). `/log` requires the bridge token to display push attempts. `GET /api/v1/health` returns `{"status":"ok"}`. API clients can `POST /api/v1/push` with JSON fields `repo`, `patch`, and `message`, plus the bearer token. A successful request returns JSON with the repository, commit SHA, and URL. Don't reuse a patch after a success: it will no longer apply cleanly.
 
 ### Paste-ready agent connection prompt
 
-> Use the Git Bridge web form at `<HTTPS_BRIDGE_URL>` to propose code changes to an allowed repository. Select `<REPO_NAME>`, paste a unified text diff, write a clear one-line commit message, fill the bridge token from the approved secret manager, and submit the form. Do not make direct Git or API calls. Read the result page and report the commit link or exact error. Do not paste tokens into the patch or commit message. Ask for review before submitting if your operating rules require it.
+> Use the Git Bridge web form at `<HTTPS_BRIDGE_URL>` to propose code changes to an allowed repository. Fill the bridge token prompt from the approved secret manager, then select `<REPO_NAME>`, paste a unified text diff, write a clear one-line commit message, and submit the form. Do not make direct Git or API calls. Read the result page and report the commit link or exact error. Do not paste tokens into the patch or commit message. Ask for review before submitting if your operating rules require it.
 
 ## Test locally
 

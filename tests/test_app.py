@@ -22,12 +22,60 @@ def valid_payload():
 
 def test_form_render(client):
     browser, _ = client
-    response = browser.get("/")
+    for path in ("/", "/log"):
+        response = browser.get(path)
+        assert response.status_code == 200
+        assert b'name="access_code"' in response.data
+        assert b'width=device-width' in response.data
+        assert b"demo" not in response.data
+        assert b"Git Bridge" not in response.data
+        assert b"token" not in response.data.lower()
+        assert b"Access code" in response.data
+        assert b"Missing: one very good dog" in response.data
+        assert b"404" in response.data
+        assert b"WARNING" not in response.data
+        assert response.data.index(b"404") < response.data.index(b"Access code")
+        assert b'name="patch"' not in response.data
+        assert b"No pushes yet" not in response.data
+
+
+def test_token_prompt_creates_session_and_pushes_without_token(client):
+    browser, bridge = client
+    response = browser.post("/", data={"access_code": "test-bridge-token"})
     assert response.status_code == 200
     assert b'<option value="demo"' in response.data
-    assert b'name="patch"' in response.data
-    assert b'name="token"' in response.data
-    assert b'width=device-width' in response.data
+    assert "Secure" in response.headers["Set-Cookie"]
+    assert "HttpOnly" in response.headers["Set-Cookie"]
+    assert b'<option value="demo"' in browser.get("/").data
+    assert b"No pushes yet" in browser.get("/log").data
+    bridge.push = Mock(return_value={"repo": "demo", "commit": "b" * 40,
+                                     "url": "https://github.com/example-owner/demo/commit/" + "b" * 40})
+    response = browser.post("/", data=valid_payload())
+    assert response.status_code == 200
+    assert b"Push succeeded" in response.data
+    bridge.push.assert_called_once()
+
+
+def test_wrong_token_never_renders_details(client):
+    browser, bridge = client
+    bridge.push = Mock()
+    for path, data in (("/", {"access_code": "wrong"}),
+                       ("/", {**valid_payload(), "token": "wrong"}),
+                       ("/log", {"access_code": "wrong"})):
+        response = browser.post(path, data=data)
+        assert response.status_code == 403
+        assert b"Invalid access code" in response.data
+        assert b"demo" not in response.data
+        assert b"Git Bridge" not in response.data
+        assert b"token" not in response.data.lower()
+        assert b"Access code" in response.data
+        assert b"Missing: one very good dog" in response.data
+        assert b"404" in response.data
+        assert b"WARNING" not in response.data
+        assert response.data.index(b"404") < response.data.index(b"Access code")
+        assert b'name="patch"' not in response.data
+    assert b"demo" not in browser.get("/").data
+    bridge.push.assert_not_called()
 
 
 def test_token_required_for_form_and_api(client):

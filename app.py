@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import hmac
 import json
 import os
@@ -12,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, session
 
 
 REPO_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -42,16 +43,40 @@ small{color:#b8c9d4}
 {% for repo in repos %}<option value="{{ repo }}" {% if repo == selected_repo %}selected{% endif %}>{{ repo }}</option>{% endfor %}</select>
 <label for="patch">Unified diff</label><textarea id="patch" name="patch" required spellcheck="false" autocapitalize="off">{{ patch or "" }}</textarea>
 <label for="message">Commit message</label><input id="message" name="message" required maxlength="240" value="{{ message or "" }}">
-<label for="token">Bridge token</label><input id="token" name="token" type="password" required autocomplete="off">
+<label for="token">Bridge token</label><input id="token" name="token" type="password" autocomplete="off">
 <button type="submit">Apply and push</button></form>
-<p><small>The token is required for each push. Do not paste credentials into the patch or commit message.</small></p>
+<p><small>Do not paste credentials into the patch or commit message.</small></p>
 <p><a href="/log">Audit log</a></p></main></body></html>"""
 
-LOG_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Push log</title>
-<style>body{font:16px system-ui,sans-serif;background:#101821;color:#edf3f8;max-width:760px;margin:2rem auto;padding:1rem}input,button{font:inherit;padding:.7rem;width:100%;box-sizing:border-box;margin:.4rem 0}a{color:#9ad4ff}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><h1>Push log</h1><a href="/">Back</a>
-<form method="post" action="/log"><label for="token">Bridge token</label><input type="password" id="token" name="token" required autocomplete="off"><button>View log</button></form>
-{% if error %}<p role="alert">{{ error }}</p>{% endif %}{% if entries is not none %}<pre>{{ entries }}</pre>{% endif %}</body></html>"""
+TOKEN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>404 - Missing: one very good dog</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#283334;background:#d5e2d9}
+*{box-sizing:border-box}body{margin:0;padding:24px;min-height:100vh;display:grid;place-items:center}
+.poster{width:min(100%,520px);background:#fff9e9;border:2px solid #344439;box-shadow:8px 9px 0 #344439;padding:clamp(20px,5vw,36px);text-align:center;transform:rotate(-.5deg)}
+.eyebrow{font-size:.8rem;letter-spacing:.22em;font-weight:800;margin:0 0 8px}
+h1{font-size:clamp(5rem,19vw,8rem);line-height:1;margin:0;letter-spacing:-.08em}
+h2{font-size:clamp(1.4rem,5vw,2rem);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.07em}
+.doodle{display:block;width:min(100%,230px);height:auto;margin:4px auto}
+.caption{line-height:1.5;margin:8px auto 14px;max-width:32ch}
+.fine{border-top:2px dashed #65766a;padding-top:14px;font-size:.85rem;line-height:1.45}
+form{display:flex;gap:8px;align-items:end;justify-content:center;margin:20px auto 0;max-width:280px;text-align:left}
+.field{flex:1;min-width:0}label{display:block;font-size:.72rem;color:#4c6157;margin-bottom:3px}
+input,button{font:inherit;border:1px solid #65766a;border-radius:3px;height:34px}
+input{width:100%;min-width:0;padding:5px 8px;background:#fff;color:#283334}
+button{padding:0 10px;background:#e3e9df;color:#283334;cursor:pointer}
+[role=alert]{font-size:.85rem;color:#9b2424;margin:9px 0 0}
+</style></head><body><main class="poster">
+<p class="eyebrow">LOST &amp; FOUND</p><h1>404</h1><h2>Missing: one very good dog</h2>
+<svg class="doodle" viewBox="0 0 230 170" role="img" aria-label="Doodle of a dog peeking over a fence" xmlns="http://www.w3.org/2000/svg">
+<g fill="none" stroke="#344439" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path fill="#d9ae7b" d="M62 106Q44 79 61 39L82 53Q113 31 147 53L169 39Q186 80 168 106Q156 134 115 137Q74 134 62 106Z"/><path fill="#a57349" d="M61 42Q44 57 52 93L76 66ZM169 42Q186 57 178 93L154 66Z"/><path d="M86 86h1m56 0h1" stroke-width="8"/><path fill="#344439" d="M106 104q9-8 18 0l-9 8z"/><path d="M115 112v8m0 0q-9 8-17 0m17 0q9 8 17 0"/><path d="M15 146h200"/></g></svg>
+<p class="caption">Last spotted chasing a loading spinner. Responds to "Who broke the internet?"</p>
+<p class="fine">If found, offer a biscuit. This page will be right here when you're done looking.</p>
+<form method="post"><div class="field"><label for="access_code">Access code</label><input type="password" id="access_code" name="access_code" required autocomplete="off"></div><button type="submit">Go</button></form>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+</main></body></html>"""
 
+LOG_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Push log</title>
+<style>body{font:16px system-ui,sans-serif;background:#101821;color:#edf3f8;max-width:760px;margin:2rem auto;padding:1rem}a{color:#9ad4ff}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><h1>Push log</h1><a href="/">Back</a><pre>{{ entries }}</pre></body></html>"""
 
 class BridgeError(Exception):
     """A safe-to-display failure from a controlled operation."""
@@ -218,9 +243,19 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
     secret = bridge_token if bridge_token is not None else os.environ["BRIDGE_TOKEN"]
     if not secret:
         raise RuntimeError("BRIDGE_TOKEN must not be empty")
+    # Rotating the bridge token also invalidates browser sessions.
+    app.secret_key = hashlib.sha256(("git-bridge-session:" + secret).encode()).digest()
+    app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SECURE=True,
+                      SESSION_COOKIE_SAMESITE="Lax")
 
     def authorized(value: str | None) -> bool:
         return isinstance(value, str) and hmac.compare_digest(value, secret)
+
+    def browser_authorized() -> bool:
+        return session.get("authenticated") is True
+
+    def token_prompt(status: int = 200):
+        return render_template_string(TOKEN_PAGE, error="Invalid access code" if status == 403 else None), status
 
     @app.after_request
     def security_headers(response):
@@ -233,10 +268,20 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
 
     @app.get("/")
     def form():
+        if not browser_authorized():
+            return token_prompt()
         return render_template_string(PAGE, repos=bridge.repos, outcome=None, selected_repo=None, patch=None, message=None)
 
     @app.post("/")
     def form_push():
+        submitted = request.form.get("access_code", request.form.get("token"))
+        token_valid = authorized(submitted)
+        if (submitted is not None and not token_valid) or not (token_valid or browser_authorized()):
+            return token_prompt(403)
+        if token_valid:
+            session["authenticated"] = True
+        if not any(field in request.form for field in ("repo", "patch", "message")):
+            return form()
         patch = request.form.get("patch")
         if isinstance(patch, str):
             # Browsers submit textarea newlines as CRLF. Git applies that fine,
@@ -244,9 +289,6 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
             patch = patch.replace("\r\n", "\n").replace("\r", "\n")
         values = {"selected_repo": request.form.get("repo"),
                   "patch": patch, "message": request.form.get("message")}
-        if not authorized(request.form.get("token")):
-            return render_template_string(PAGE, repos=bridge.repos, **values,
-                                          outcome={"title": "Push failed", "detail": "Invalid bridge token"}), 403
         try:
             result = bridge.push(request.form.get("repo"), patch, request.form.get("message"))
         except BridgeError as exc:
@@ -276,13 +318,18 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
 
     @app.route("/log", methods=["GET", "POST"])
     def audit_log():
-        if request.method == "GET":
-            return render_template_string(LOG_PAGE, entries=None, error=None)
-        if not authorized(request.form.get("token")):
-            return render_template_string(LOG_PAGE, entries=None, error="Invalid bridge token"), 403
+        if request.method == "POST":
+            submitted = request.form.get("access_code", request.form.get("token"))
+            token_valid = authorized(submitted)
+            if (submitted is not None and not token_valid) or not (token_valid or browser_authorized()):
+                return token_prompt(403)
+            if token_valid:
+                session["authenticated"] = True
+        elif not browser_authorized():
+            return token_prompt()
         path = bridge.data_dir / "audit.jsonl"
         entries = path.read_text(encoding="utf-8") if path.exists() else "No pushes yet."
-        return render_template_string(LOG_PAGE, entries=entries, error=None)
+        return render_template_string(LOG_PAGE, entries=entries)
 
     return app
 
