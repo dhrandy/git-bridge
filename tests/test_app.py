@@ -31,7 +31,7 @@ def test_form_render(client):
         assert b"Git Bridge" not in response.data
         assert b"token" not in response.data.lower()
         assert b"Access code" in response.data
-        assert b"Missing: one very good dog" in response.data
+        assert b"The Page That Got Away" in response.data
         assert b"404" in response.data
         assert b"WARNING" not in response.data
         assert response.data.index(b"404") < response.data.index(b"Access code")
@@ -69,7 +69,7 @@ def test_wrong_token_never_renders_details(client):
         assert b"Git Bridge" not in response.data
         assert b"token" not in response.data.lower()
         assert b"Access code" in response.data
-        assert b"Missing: one very good dog" in response.data
+        assert b"The Page That Got Away" in response.data
         assert b"404" in response.data
         assert b"WARNING" not in response.data
         assert response.data.index(b"404") < response.data.index(b"Access code")

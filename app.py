@@ -48,32 +48,218 @@ small{color:#b8c9d4}
 <p><small>Do not paste credentials into the patch or commit message.</small></p>
 <p><a href="/log">Audit log</a></p></main></body></html>"""
 
-TOKEN_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>404 - Missing: one very good dog</title>
+TOKEN_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 - The page that got away</title>
 <style>
-:root{font-family:system-ui,sans-serif;color:#283334;background:#d5e2d9}
-*{box-sizing:border-box}body{margin:0;padding:24px;min-height:100vh;display:grid;place-items:center}
-.poster{width:min(100%,520px);background:#fff9e9;border:2px solid #344439;box-shadow:8px 9px 0 #344439;padding:clamp(20px,5vw,36px);text-align:center;transform:rotate(-.5deg)}
-.eyebrow{font-size:.8rem;letter-spacing:.22em;font-weight:800;margin:0 0 8px}
-h1{font-size:clamp(5rem,19vw,8rem);line-height:1;margin:0;letter-spacing:-.08em}
-h2{font-size:clamp(1.4rem,5vw,2rem);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.07em}
-.doodle{display:block;width:min(100%,230px);height:auto;margin:4px auto}
-.caption{line-height:1.5;margin:8px auto 14px;max-width:32ch}
-.fine{border-top:2px dashed #65766a;padding-top:14px;font-size:.85rem;line-height:1.45}
-form{display:flex;gap:8px;align-items:end;justify-content:center;margin:20px auto 0;max-width:280px;text-align:left}
-.field{flex:1;min-width:0}label{display:block;font-size:.72rem;color:#4c6157;margin-bottom:3px}
-input,button{font:inherit;border:1px solid #65766a;border-radius:3px;height:34px}
-input{width:100%;min-width:0;padding:5px 8px;background:#fff;color:#283334}
-button{padding:0 10px;background:#e3e9df;color:#283334;cursor:pointer}
-[role=alert]{font-size:.85rem;color:#9b2424;margin:9px 0 0}
-</style></head><body><main class="poster">
-<p class="eyebrow">LOST &amp; FOUND</p><h1>404</h1><h2>Missing: one very good dog</h2>
-<svg class="doodle" viewBox="0 0 230 170" role="img" aria-label="Doodle of a dog peeking over a fence" xmlns="http://www.w3.org/2000/svg">
-<g fill="none" stroke="#344439" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path fill="#d9ae7b" d="M62 106Q44 79 61 39L82 53Q113 31 147 53L169 39Q186 80 168 106Q156 134 115 137Q74 134 62 106Z"/><path fill="#a57349" d="M61 42Q44 57 52 93L76 66ZM169 42Q186 57 178 93L154 66Z"/><path d="M86 86h1m56 0h1" stroke-width="8"/><path fill="#344439" d="M106 104q9-8 18 0l-9 8z"/><path d="M115 112v8m0 0q-9 8-17 0m17 0q9 8 17 0"/><path d="M15 146h200"/></g></svg>
-<p class="caption">Last spotted chasing a loading spinner. Responds to "Who broke the internet?"</p>
-<p class="fine">If found, offer a biscuit. This page will be right here when you're done looking.</p>
-<form method="post"><div class="field"><label for="access_code">Access code</label><input type="password" id="access_code" name="access_code" required autocomplete="off"></div><button type="submit">Go</button></form>
-{% if error %}<p role="alert">{{ error }}</p>{% endif %}
-</main></body></html>"""
+  :root{
+    --ink:#14202a;
+    --cream:#f6efdc;
+    --lake:#3d7a8c;
+    --deep:#25505f;
+    --bobber:#d8492b;
+    --mustard:#e8b93c;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#1c2a30;
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:20px 14px;
+    font-family:"Comic Sans MS","Chalkboard SE","Comic Neue","Segoe Print",cursive,sans-serif;
+    color:var(--ink);
+  }
+  .board{
+    width:100%;max-width:610px;
+    background:var(--cream);
+    border:4px solid var(--ink);
+    box-shadow:9px 9px 0 rgba(0,0,0,.5);
+    position:relative;overflow:hidden;
+    padding:20px 24px 18px;
+  }
+  .dots{
+    position:absolute;inset:0;pointer-events:none;
+    background-image:radial-gradient(circle, rgba(20,32,42,.10) 1px, transparent 1.3px);
+    background-size:9px 9px;
+  }
+  .inner{position:relative;z-index:2}
+  .shop{
+    text-align:center;
+    font-size:12px;letter-spacing:5px;text-transform:uppercase;
+    color:var(--deep);
+  }
+  h1{
+    text-align:center;
+    font-family:"Arial Black","Arial Narrow Bold",Impact,sans-serif;
+    font-size:clamp(26px,6.4vw,40px);
+    text-transform:uppercase;letter-spacing:2px;
+    color:var(--cream);
+    -webkit-text-stroke:1.8px var(--ink);
+    text-shadow:3px 3px 0 var(--lake), 5px 5px 0 var(--ink);
+    margin-top:6px;
+  }
+  .hero{
+    position:relative;
+    margin:12px auto 0;
+    border:4px solid var(--ink);
+    background:var(--lake);
+    box-shadow:6px 6px 0 rgba(20,32,42,.8);
+    overflow:hidden;
+  }
+  .hero svg{display:block;width:100%;height:auto}
+  .hero .tag{
+    position:absolute;top:10px;left:10px;
+    background:var(--mustard);border:3px solid var(--ink);
+    padding:3px 10px;font-size:13px;text-transform:uppercase;letter-spacing:1px;
+    transform:rotate(-2deg);
+  }
+  .hero .bubble{
+    position:absolute;top:12px;right:12px;max-width:200px;
+    background:#fff;border:3px solid var(--ink);border-radius:14px;
+    padding:7px 11px;font-size:14px;line-height:1.35;
+  }
+  .hero .bubble:after{
+    content:"";position:absolute;left:22px;bottom:-10px;
+    width:13px;height:13px;background:#fff;
+    border-right:3px solid var(--ink);border-bottom:3px solid var(--ink);
+    transform:skewX(30deg) rotate(45deg);
+  }
+  .tales{
+    margin:14px auto 0;max-width:480px;
+    font-size:15px;line-height:1.75;
+  }
+  .tales .kicker{
+    display:inline-block;background:var(--deep);color:var(--cream);
+    border:2.5px solid var(--ink);
+    font-size:12px;letter-spacing:3px;text-transform:uppercase;
+    padding:2px 10px;margin-bottom:8px;transform:rotate(-1deg);
+  }
+  .tales b{text-transform:uppercase;letter-spacing:1px}
+  .tales .measure{color:var(--bobber);font-weight:700}
+  .tackle{
+    margin:16px auto 0;max-width:460px;
+    border:3px solid var(--ink);
+    background:var(--mustard);
+    box-shadow:4px 4px 0 rgba(20,32,42,.8);
+    padding:10px 14px 12px;
+  }
+  .tackle .head{
+    text-align:center;font-size:11px;letter-spacing:4px;text-transform:uppercase;
+    opacity:.75;margin-bottom:8px;
+  }
+  .access{display:flex;gap:9px;justify-content:center;align-items:center}
+  .access input{
+    font-family:inherit;font-size:14px;
+    padding:6px 10px;width:170px;
+    border:2.5px solid var(--ink);background:#fff;outline:none;
+  }
+  .access input:focus{box-shadow:3px 3px 0 var(--lake)}
+  .access button{
+    font-family:"Arial Black",Impact,sans-serif;font-size:14px;letter-spacing:2px;
+    padding:7px 16px;border:2.5px solid var(--ink);
+    background:var(--bobber);color:#fff;cursor:pointer;
+    box-shadow:3px 3px 0 var(--ink);
+  }
+  .access button:active{transform:translate(3px,3px);box-shadow:none}
+  .fine{
+    text-align:center;margin-top:12px;font-size:11px;letter-spacing:2px;
+    text-transform:uppercase;opacity:.65;
+  }
+  @media (max-width:560px){
+    .hero{padding:10px 10px 0}
+    .hero .tag{position:static;display:inline-block;margin:0 0 8px}
+    .hero .bubble{position:static;max-width:none;margin:0 0 10px;border-radius:12px}
+    .hero .bubble:after{display:none}
+  }
+
+  .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  [role=alert]{color:#b3402a;font-weight:700;font-size:14px;margin-top:8px;text-align:center}
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="dots"></div>
+  <div class="inner">
+    <div class="shop">Rusty Hook Bait &amp; Tackle &middot; Est. whenever</div>
+    <h1>404: The Page That Got Away</h1>
+    <div class="hero">
+      <span class="tag">Big-fish story No. 404</span>
+      <div class="bubble">It was THIS big. Swam off with your whole page.</div>
+      <svg viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg" aria-label="fisherman, bent hook, and huge fish">
+        <!-- water bands -->
+        <rect x="0" y="150" width="600" height="110" fill="#25505f"/>
+        <path d="M0 150 q40 -12 80 0 t80 0 t80 0 t80 0 t80 0 t80 0 t80 0 t80 0" fill="none" stroke="#f6efdc" stroke-width="4"/>
+        <!-- halftone band on water -->
+        <g fill="rgba(20,32,42,.25)">
+          <circle cx="30" cy="180" r="2.4"/><circle cx="70" cy="196" r="2.4"/><circle cx="110" cy="178" r="2.4"/><circle cx="150" cy="200" r="2.4"/><circle cx="190" cy="184" r="2.4"/><circle cx="230" cy="198" r="2.4"/><circle cx="520" cy="182" r="2.4"/><circle cx="560" cy="198" r="2.4"/><circle cx="470" cy="204" r="2.4"/>
+        </g>
+        <!-- boat -->
+        <path d="M60 150 L190 150 L172 190 L82 190 Z" fill="#f6efdc" stroke="#14202a" stroke-width="4"/>
+        <!-- fisherman -->
+        <circle cx="120" cy="98" r="13" fill="#f6efdc" stroke="#14202a" stroke-width="3.5"/>
+        <path d="M104 92 q16 -14 34 -2 l0 -6 q-18 -12 -34 4z" fill="#14202a"/>
+        <path d="M120 111 L120 140" stroke="#14202a" stroke-width="5" stroke-linecap="round"/>
+        <path d="M120 118 L96 132" stroke="#14202a" stroke-width="4" stroke-linecap="round"/>
+        <path d="M120 118 L150 108" stroke="#14202a" stroke-width="4" stroke-linecap="round"/>
+        <!-- rod, bent hard -->
+        <path d="M150 108 q60 -34 118 6" fill="none" stroke="#14202a" stroke-width="3.6" stroke-linecap="round"/>
+        <!-- line into water -->
+        <path d="M268 114 q10 22 2 44" fill="none" stroke="#f6efdc" stroke-width="2.4" stroke-dasharray="6 5"/>
+        <!-- bent hook -->
+        <g transform="translate(258 186)">
+          <path d="M6 -20 q-16 6 -12 22 q3 12 16 10" fill="none" stroke="#d8492b" stroke-width="5" stroke-linecap="round"/>
+          <path d="M6 -20 l10 -8" stroke="#d8492b" stroke-width="5" stroke-linecap="round"/>
+        </g>
+        <!-- huge fish silhouette -->
+        <g>
+          <path d="M330 214 q70 -52 168 -22 q26 8 44 24 q-18 16 -44 24 q-98 30 -168 -26z" fill="#14202a"/>
+          <path d="M330 214 l-42 -22 q6 22 0 44z" fill="#14202a"/>
+          <circle cx="508" cy="206" r="5" fill="#f6efdc"/>
+          <path d="M400 196 q30 18 0 36" fill="none" stroke="#25505f" stroke-width="4"/>
+          <!-- splash lines near hook -->
+          <g stroke="#f6efdc" stroke-width="3" stroke-linecap="round">
+            <path d="M292 178 l10 -14"/>
+            <path d="M312 186 l16 -10"/>
+          </g>
+        </g>
+        <!-- bobber -->
+        <circle cx="210" cy="146" r="8" fill="#d8492b" stroke="#14202a" stroke-width="3"/>
+        <path d="M202 146 a8 8 0 0 1 16 0z" fill="#f6efdc"/>
+        <!-- sun -->
+        <circle cx="316" cy="46" r="22" fill="#e8b93c" stroke="#14202a" stroke-width="3.5"/>
+        <g stroke="#14202a" stroke-width="3" stroke-linecap="round">
+          <path d="M316 12 v-9"/><path d="M345 28 l7 -7"/><path d="M349 55 h9"/><path d="M287 28 l-7 -7"/>
+        </g>
+        <!-- birds -->
+        <g stroke="#14202a" stroke-width="2.6" fill="none" stroke-linecap="round">
+          <path d="M70 40 q8 -8 16 0 q8 -8 16 0"/>
+          <path d="M130 26 q7 -7 14 0 q7 -7 14 0"/>
+        </g>
+      </svg>
+    </div>
+    <div class="tales">
+      <span class="kicker">The official report</span>
+      <div><b>Species:</b> <i>pagus notfoundus</i> &mdash; rare, slippery, possibly mythical.</div>
+      <div><b>Size:</b> <span class="measure">THIS big</span> (witnesses disagree; the tale grows hourly).</div>
+      <div><b>Bait used:</b> one (1) broken link. It snapped the line at the homepage.</div>
+      <div><b>Last seen:</b> heading for deeper water with your page in its mouth.</div>
+    </div>
+    <div class="tackle">
+      <div class="head">Bait counter &middot; regulars only</div>
+      <form class="access" method="post" autocomplete="off">
+        <label for="access_code" class="visually-hidden">Access code</label>
+        <input type="password" id="access_code" name="access_code" placeholder="Access code" required autocomplete="off">
+        <button type="submit">GO</button>
+      </form>
+      {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+    </div>
+    <div class="fine">no license required &middot; catch &amp; release &middot; mostly release</div>
+  </div>
+</div>
+</body>
+</html>"""
 
 LOG_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Push log</title>
 <style>body{font:16px system-ui,sans-serif;background:#101821;color:#edf3f8;max-width:760px;margin:2rem auto;padding:1rem}a{color:#9ad4ff}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><h1>Push log</h1><a href="/">Back</a><pre>{{ entries }}</pre></body></html>"""
