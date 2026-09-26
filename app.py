@@ -500,9 +500,13 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
         # they would drown out real use.
         if request.path == "/api/v1/health":
             return response
+        # Behind a reverse proxy the real client address is the first
+        # X-Forwarded-For entry; direct connections fall back to the peer.
+        ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
         record = {"timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                   "action": f"{request.method} {request.path}",
                   "caller": caller_label(),
+                  "ip": (ip or request.remote_addr or "")[:45],
                   "result": "success" if response.status_code < 400 else "failed",
                   "status": response.status_code}
         repo = request.form.get("repo") if request.form else None

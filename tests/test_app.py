@@ -189,6 +189,10 @@ def test_request_logging(client, capsys):
     api, form = records
     assert api["action"] == "POST /api/v1/push" and api["result"] == "success" and api["repo"] == "demo"
     assert api["caller"].startswith("key sha256:") and api["caller"] != form["caller"]
+    assert api["ip"] == "127.0.0.1"
+    proxied = browser.get("/", headers={"X-Forwarded-For": "203.0.113.7, 10.0.0.1"})
+    proxied_record = json.loads(capsys.readouterr().out.strip().splitlines()[-1][len("git-bridge request: "):])
+    assert proxied_record["ip"] == "203.0.113.7"
     assert form["action"] == "POST /" and form["caller"] == "no credentials"
     assert "test-bridge-token" not in "".join(lines)
 
