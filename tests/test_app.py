@@ -155,6 +155,46 @@ def test_form_normalizes_crlf_patch(client):
     bridge.push.assert_called_once_with("demo", valid_payload()["patch"], "Fix greeting")
 
 
+def test_form_restores_final_newline_after_blank_context(client):
+    browser, bridge = client
+    bridge.push = Mock(return_value={"repo": "demo", "commit": "b" * 40,
+                                     "url": "https://github.com/example-owner/demo/commit/" + "b" * 40})
+    # A browser form filler may remove the textarea's final newline while keeping
+    # the space marking a blank context line. The space must not be stripped.
+    patch = "--- a/file.txt\n+++ b/file.txt\n@@ -1,2 +1,2 @@\n-old\n+new\n "
+    response = browser.post("/", data={"repo": "demo", "patch": patch,
+                                       "message": "Fix greeting", "token": "test-bridge-token"})
+    assert response.status_code == 200
+    bridge.push.assert_called_once_with("demo", patch + "\n", "Fix greeting")
+
+
+def test_blank_context_patch_applies_after_form_normalization(client, tmp_path):
+    import subprocess
+    browser, bridge = client
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+    (worktree / "file.txt").write_text("old\n\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "add", "file.txt"], check=True)
+    patch = "--- a/file.txt\n+++ b/file.txt\n@@ -1,2 +1,2 @@\n-old\n+new\n "
+
+    def check_patch(repo, supplied, message):
+        assert supplied == patch + "\n"
+        check = subprocess.run(["git", "apply", "--check", "-"], cwd=worktree,
+                               input=supplied, text=True, capture_output=True)
+        assert check.returncode == 0, check.stderr
+        subprocess.run(["git", "apply", "-"], cwd=worktree,
+                       input=supplied, text=True, capture_output=True, check=True)
+        return {"repo": repo, "commit": "b" * 40,
+                "url": "https://github.com/example-owner/demo/commit/" + "b" * 40}
+
+    bridge.push = check_patch
+    response = browser.post("/", data={"repo": "demo", "patch": patch,
+                                       "message": "Fix greeting", "token": "test-bridge-token"})
+    assert response.status_code == 200
+    assert (worktree / "file.txt").read_text(encoding="utf-8") == "new\n\n"
+
+
 def test_head_mismatch(client):
     browser, bridge = client
     heads = iter(["a" * 40, "c" * 40])

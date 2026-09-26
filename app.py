@@ -565,9 +565,12 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
         else:
             patch = request.form.get("patch")
             if isinstance(patch, str):
-                # Browsers submit textarea newlines as CRLF. Git applies that fine,
-                # but diff --check reports the embedded CR as trailing whitespace.
+                # Normalize browser line endings without stripping diff context spaces.
+                # Some form fillers drop the final textarea newline; git apply needs
+                # it even when the last line contains only a context marker (" ").
                 patch = patch.replace("\r\n", "\n").replace("\r", "\n")
+                if patch and not patch.endswith("\n"):
+                    patch += "\n"
             values["patch"] = patch
             try:
                 result = bridge.push(request.form.get("repo"), patch, request.form.get("message"))
