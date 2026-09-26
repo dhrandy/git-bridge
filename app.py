@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import fcntl
 import hashlib
 import hmac
@@ -19,6 +21,7 @@ from flask import Flask, jsonify, render_template_string, request, session
 REPO_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 MAX_PATCH_BYTES = 1_000_000
+MAX_FILE_BYTES = 5_000_000
 MAX_MESSAGE_LENGTH = 240
 
 PAGE = """<!doctype html>
@@ -38,10 +41,13 @@ small{color:#b8c9d4}
 {% if outcome %}<section role="status"><h2>{{ outcome.title }}</h2><p>{{ outcome.detail }}</p>
 {% if outcome.url %}<p><a href="{{ outcome.url }}" rel="noopener noreferrer">View commit</a></p>{% endif %}
 {% if outcome.error %}<pre>{{ outcome.error }}</pre>{% endif %}</section>{% endif %}
-<form action="/" method="post" autocomplete="off">
+<form action="/" method="post" enctype="multipart/form-data" autocomplete="off">
 <label for="repo">Repository</label><select id="repo" name="repo" required>
 {% for repo in repos %}<option value="{{ repo }}" {% if repo == selected_repo %}selected{% endif %}>{{ repo }}</option>{% endfor %}</select>
-<label for="patch">Unified diff</label><textarea id="patch" name="patch" required spellcheck="false" autocapitalize="off">{{ patch or "" }}</textarea>
+<p>Submit either a unified diff below, or a single file upload (for images and other binaries, committed as their real bytes).</p>
+<label for="patch">Unified diff</label><textarea id="patch" name="patch" spellcheck="false" autocapitalize="off">{{ patch or "" }}</textarea>
+<label for="file">File upload</label><input id="file" name="file" type="file">
+<label for="file_path">File destination path in repo</label><input id="file_path" name="file_path" maxlength="500" placeholder="docs/screenshots/example.png" value="{{ file_path or "" }}">
 <label for="message">Commit message</label><input id="message" name="message" required maxlength="240" value="{{ message or "" }}">
 <label for="token">Bridge token</label><input id="token" name="token" type="password" autocomplete="off">
 <button type="submit">Apply and push</button></form>
@@ -343,6 +349,29 @@ class GitBridge:
 
     def push(self, repo: Any, patch: Any, message: Any) -> dict[str, str]:
         self._validate(repo, patch, message)
+        return self._change(repo, message, ("patch", patch))
+
+    def add_file(self, repo: Any, path: Any, data: Any, message: Any) -> dict[str, str]:
+        """Commit one file's real bytes at a repo-relative path."""
+        if not isinstance(repo, str) or repo not in self.repos:
+            raise BridgeError("Repository is not allowed")
+        if not isinstance(message, str) or not message.strip() or len(message) > MAX_MESSAGE_LENGTH or "\n" in message or "\r" in message:
+            raise BridgeError("Commit message must be one line, 1-240 characters")
+        if not isinstance(path, str) or not self._safe_file_path(path):
+            raise BridgeError("File path must be a relative path inside the repository")
+        if not isinstance(data, bytes) or not data or len(data) > MAX_FILE_BYTES:
+            raise BridgeError("File must be nonempty and under 5 MB")
+        return self._change(repo, message, ("file", path, data))
+
+    @staticmethod
+    def _safe_file_path(path: str) -> bool:
+        if path.startswith("/") or "\x00" in path or "\\" in path:
+            return False
+        parts = path.split("/")
+        return all(REPO_NAME.fullmatch(part) and part not in (".", "..", ".git")
+                   for part in parts)
+
+    def _change(self, repo: str, message: str, change: tuple) -> dict[str, str]:
         url = f"https://github.com/{self.owner}/{repo}.git"
         checkout = self.data_dir / "repos" / repo
         checkout.parent.mkdir(parents=True, exist_ok=True)
@@ -369,12 +398,23 @@ class GitBridge:
             self._run(["git", "clean", "-fd"], checkout)
             self._run(["git", "checkout", "-B", "main", expected], checkout)
             self._run(["git", "reset", "--hard", expected], checkout)
-            # stdin is not shell input. Git validates the patch's paths and hunks.
-            self._run(["git", "apply", "--check", "-"], checkout, patch)
-            self._run(["git", "apply", "-"], checkout, patch)
-            self._run(["git", "diff", "--check"], checkout)
-            self._run(["git", "add", "-A"], checkout)
-            self._run(["git", "diff", "--cached", "--check"], checkout)
+            if change[0] == "patch":
+                # stdin is not shell input. Git validates the patch's paths and hunks.
+                self._run(["git", "apply", "--check", "-"], checkout, change[1])
+                self._run(["git", "apply", "-"], checkout, change[1])
+                self._run(["git", "diff", "--check"], checkout)
+                self._run(["git", "add", "-A"], checkout)
+                self._run(["git", "diff", "--cached", "--check"], checkout)
+            else:
+                _, path, data = change
+                target = checkout / path
+                if target.is_symlink() or any(
+                        (checkout / parent).is_symlink()
+                        for parent in Path(path).parents if str(parent) != "."):
+                    raise BridgeError("Target path crosses a symlink", 500)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+                self._run(["git", "add", "--", path], checkout)
             self._run(["git", "commit", "-m", message], checkout)
             commit = self._run(["git", "rev-parse", "HEAD"], checkout)
             if not SHA.fullmatch(commit):
@@ -385,16 +425,16 @@ class GitBridge:
             try:
                 self._run(["git", "push", "origin", "main"], checkout)
             except BridgeError as exc:
-                self._audit(repo, commit, message, status="failed", error=str(exc))
+                self._audit(repo, commit, message, status="failed", error=str(exc), kind=change[0])
                 raise
-            self._audit(repo, commit, message, status="succeeded")
+            self._audit(repo, commit, message, status="succeeded", kind=change[0])
             return {"repo": repo, "commit": commit,
                     "url": f"https://github.com/{self.owner}/{repo}/commit/{commit}"}
 
     def _audit(self, repo: str, commit: str, message: str, status: str,
-               error: str | None = None) -> None:
+               error: str | None = None, kind: str = "patch") -> None:
         record = {"timestamp": datetime.now(timezone.utc).isoformat(), "repo": repo,
-                  "commit": commit, "message": message, "status": status}
+                  "commit": commit, "message": message, "status": status, "kind": kind}
         if error:
             record["error"] = error
         # Append under the same per-repository lock; append is atomic per write.
@@ -424,7 +464,7 @@ def configured_bridge() -> GitBridge:
 
 def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None) -> Flask:
     app = Flask(__name__)
-    app.config["MAX_CONTENT_LENGTH"] = 1_200_000
+    app.config["MAX_CONTENT_LENGTH"] = 8_000_000
     bridge = bridge if bridge is not None else configured_bridge()
     secret = bridge_token if bridge_token is not None else os.environ["BRIDGE_TOKEN"]
     if not secret:
@@ -494,7 +534,7 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
     def form():
         if not browser_authorized():
             return token_prompt()
-        return render_template_string(PAGE, repos=bridge.repos, outcome=None, selected_repo=None, patch=None, message=None)
+        return render_template_string(PAGE, repos=bridge.repos, outcome=None, selected_repo=None, patch=None, message=None, file_path=None)
 
     @app.post("/")
     def form_push():
@@ -504,21 +544,34 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
             return token_prompt(403)
         if token_valid:
             session["authenticated"] = True
-        if not any(field in request.form for field in ("repo", "patch", "message")):
+        if not any(field in request.form for field in ("repo", "patch", "message")) and not request.files.get("file"):
             return form()
-        patch = request.form.get("patch")
-        if isinstance(patch, str):
-            # Browsers submit textarea newlines as CRLF. Git applies that fine,
-            # but diff --check reports the embedded CR as trailing whitespace.
-            patch = patch.replace("\r\n", "\n").replace("\r", "\n")
+        upload = request.files.get("file")
         values = {"selected_repo": request.form.get("repo"),
-                  "patch": patch, "message": request.form.get("message")}
-        try:
-            result = bridge.push(request.form.get("repo"), patch, request.form.get("message"))
-        except BridgeError as exc:
-            return render_template_string(PAGE, repos=bridge.repos, **values,
-                                          outcome={"title": "Push failed", "detail": "Git did not push the patch.", "error": str(exc)}), exc.status
+                  "patch": request.form.get("patch"), "message": request.form.get("message"),
+                  "file_path": request.form.get("file_path")}
+        if upload is not None and upload.filename:
+            data = upload.stream.read(MAX_FILE_BYTES + 1)
+            try:
+                result = bridge.add_file(request.form.get("repo"), request.form.get("file_path"),
+                                         data, request.form.get("message"))
+            except BridgeError as exc:
+                return render_template_string(PAGE, repos=bridge.repos, **values,
+                                              outcome={"title": "Push failed", "detail": "Git did not commit the file.", "error": str(exc)}), exc.status
+        else:
+            patch = request.form.get("patch")
+            if isinstance(patch, str):
+                # Browsers submit textarea newlines as CRLF. Git applies that fine,
+                # but diff --check reports the embedded CR as trailing whitespace.
+                patch = patch.replace("\r\n", "\n").replace("\r", "\n")
+            values["patch"] = patch
+            try:
+                result = bridge.push(request.form.get("repo"), patch, request.form.get("message"))
+            except BridgeError as exc:
+                return render_template_string(PAGE, repos=bridge.repos, **values,
+                                              outcome={"title": "Push failed", "detail": "Git did not push the patch.", "error": str(exc)}), exc.status
         return render_template_string(PAGE, repos=bridge.repos, selected_repo=None, patch=None, message=None,
+                                      file_path=None,
                                       outcome={"title": "Push succeeded", "detail": f"Commit {result['commit']}",
                                                "url": result["url"]})
 
@@ -530,8 +583,19 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return jsonify(error="Expected JSON object"), 400
+        file_spec = body.get("file")
         try:
-            result = bridge.push(body.get("repo"), body.get("patch"), body.get("message"))
+            if file_spec is not None:
+                if not isinstance(file_spec, dict):
+                    raise BridgeError("file must be an object with path and content_b64")
+                try:
+                    data = base64.b64decode(file_spec.get("content_b64") or "", validate=True)
+                except (binascii.Error, ValueError):
+                    raise BridgeError("file.content_b64 must be valid base64") from None
+                result = bridge.add_file(body.get("repo"), file_spec.get("path"), data,
+                                         body.get("message"))
+            else:
+                result = bridge.push(body.get("repo"), body.get("patch"), body.get("message"))
         except BridgeError as exc:
             return jsonify(error=str(exc)), exc.status
         return jsonify(result), 201

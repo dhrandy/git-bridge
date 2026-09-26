@@ -1,3 +1,4 @@
+import base64
 import json
 from pathlib import Path
 from unittest.mock import Mock
@@ -199,3 +200,66 @@ def test_failed_request_logs_reason(client, capsys):
     out = capsys.readouterr().out
     assert '"result": "failed"' in out and '"status": 401' in out
     assert "wrong-token" not in out
+
+
+def test_api_file_upload_commits_real_bytes(client):
+    browser, bridge = client
+    sha = "a" * 40
+    commit = "b" * 40
+
+    def run(args, cwd=None, input_text=None):
+        if args[1] == "ls-remote":
+            return f"{sha}\trefs/heads/main"
+        if args[1] == "clone":
+            Path(args[-1]).mkdir(parents=True)
+            return ""
+        if args[1] == "rev-parse":
+            return sha if args[-1] == "refs/remotes/origin/main" else commit
+        return ""
+
+    bridge._run = run
+    payload = {"repo": "demo", "message": "Add screenshot",
+               "file": {"path": "docs/screenshots/today.jpg",
+                        "content_b64": base64.b64encode(b"\xff\xd8\xff binary \x00 bytes").decode()}}
+    response = browser.post("/api/v1/push", json=payload,
+                            headers={"Authorization": "Bearer test-bridge-token"})
+    assert response.status_code == 201
+    assert response.json["url"].endswith(commit)
+    written = bridge.data_dir / "repos" / "demo" / "docs" / "screenshots" / "today.jpg"
+    assert written.read_bytes() == b"\xff\xd8\xff binary \x00 bytes"
+    assert '"kind": "file"' in (bridge.data_dir / "audit.jsonl").read_text()
+
+
+@pytest.mark.parametrize("path", ["../evil.txt", "/etc/passwd", "docs/../../x", ".git/config",
+                                  "a\\b.txt", "docs//x.txt", ""])
+def test_file_path_rejection(client, path):
+    browser, _ = client
+    payload = {"repo": "demo", "message": "Add screenshot",
+               "file": {"path": path, "content_b64": base64.b64encode(b"data").decode()}}
+    response = browser.post("/api/v1/push", json=payload,
+                            headers={"Authorization": "Bearer test-bridge-token"})
+    assert response.status_code == 400
+
+
+def test_bad_base64_rejection(client):
+    browser, _ = client
+    payload = {"repo": "demo", "message": "Add screenshot",
+               "file": {"path": "docs/x.png", "content_b64": "not base64!!!"}}
+    response = browser.post("/api/v1/push", json=payload,
+                            headers={"Authorization": "Bearer test-bridge-token"})
+    assert response.status_code == 400
+
+
+def test_form_file_upload(client):
+    import io
+    browser, bridge = client
+    commit = "b" * 40
+    bridge.add_file = Mock(return_value={"repo": "demo", "commit": commit,
+                                         "url": "https://github.com/example-owner/demo/commit/" + commit})
+    response = browser.post("/", data={
+        "repo": "demo", "message": "Add screenshot", "file_path": "docs/x.png",
+        "token": "test-bridge-token",
+        "file": (io.BytesIO(b"\x89PNG\r\n\x1a\n fake"), "x.png")}, content_type="multipart/form-data")
+    assert response.status_code == 200
+    assert b"Push succeeded" in response.data
+    bridge.add_file.assert_called_once_with("demo", "docs/x.png", b"\x89PNG\r\n\x1a\n fake", "Add screenshot")
