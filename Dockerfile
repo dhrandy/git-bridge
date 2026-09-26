@@ -9,4 +9,4 @@ RUN useradd --system --uid 10001 --home-dir /app bridge \
     && mkdir -p /data && chown bridge:bridge /data
 USER bridge
 EXPOSE 8080
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "--timeout", "180", "app:create_app()"]
