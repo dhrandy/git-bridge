@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -171,3 +172,30 @@ def test_head_mismatch(client):
                             headers={"Authorization": "Bearer test-bridge-token"})
     assert response.status_code == 409
     assert "HEAD mismatch" in response.json["error"]
+def test_request_logging(client, capsys):
+    browser, bridge = client
+    bridge.push = Mock(return_value={"repo": "demo", "commit": "b" * 40,
+                                     "url": "https://github.com/example-owner/demo/commit/" + "b" * 40})
+    browser.get("/api/v1/health")
+    browser.post("/api/v1/push", json=valid_payload(),
+                 headers={"Authorization": "Bearer test-bridge-token"})
+    browser.post("/", data=valid_payload())
+    lines = [line for line in capsys.readouterr().out.splitlines()
+             if line.startswith("git-bridge request: ")]
+    records = [json.loads(line[len("git-bridge request: "):]) for line in lines]
+    assert all(record["action"] != "GET /api/v1/health" for record in records)
+    assert len(records) == 2
+    api, form = records
+    assert api["action"] == "POST /api/v1/push" and api["result"] == "success" and api["repo"] == "demo"
+    assert api["caller"].startswith("key sha256:") and api["caller"] != form["caller"]
+    assert form["action"] == "POST /" and form["caller"] == "no credentials"
+    assert "test-bridge-token" not in "".join(lines)
+
+
+def test_failed_request_logs_reason(client, capsys):
+    browser, _ = client
+    browser.post("/api/v1/push", json=valid_payload(),
+                 headers={"Authorization": "Bearer wrong-token"})
+    out = capsys.readouterr().out
+    assert '"result": "failed"' in out and '"status": 401' in out
+    assert "wrong-token" not in out

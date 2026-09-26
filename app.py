@@ -440,6 +440,44 @@ def create_app(bridge: GitBridge | None = None, bridge_token: str | None = None)
     def browser_authorized() -> bool:
         return session.get("authenticated") is True
 
+    def caller_label() -> str:
+        # Identify the caller without ever logging a secret: a short hash of the
+        # presented key distinguishes keys, and sessions are labeled as such.
+        header = request.headers.get("Authorization", "")
+        presented = header[7:] if header.startswith("Bearer ") else None
+        if presented is None:
+            presented = request.form.get("access_code") or request.form.get("token") or None
+        if presented is not None:
+            return "key sha256:" + hashlib.sha256(presented.encode()).hexdigest()[:10]
+        if session.get("authenticated"):
+            return "browser session"
+        return "no credentials"
+
+    @app.after_request
+    def log_request(response):
+        # One structured line per request on stdout, so it lands in the
+        # container logs (Dockhand shows these). Health checks are skipped;
+        # they would drown out real use.
+        if request.path == "/api/v1/health":
+            return response
+        record = {"timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                  "action": f"{request.method} {request.path}",
+                  "caller": caller_label(),
+                  "result": "success" if response.status_code < 400 else "failed",
+                  "status": response.status_code}
+        repo = request.form.get("repo") if request.form else None
+        if repo is None and request.is_json:
+            body = request.get_json(silent=True)
+            repo = body.get("repo") if isinstance(body, dict) else None
+        if isinstance(repo, str):
+            record["repo"] = repo
+        if response.status_code >= 400:
+            body = response.get_json(silent=True)
+            if isinstance(body, dict) and isinstance(body.get("error"), str):
+                record["error"] = body["error"][:200]
+        print("git-bridge request: " + json.dumps(record, ensure_ascii=False), flush=True)
+        return response
+
     def token_prompt(status: int = 200):
         return render_template_string(TOKEN_PAGE, error="Invalid access code" if status == 403 else None), status
 
